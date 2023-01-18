@@ -1,0 +1,18 @@
+version: '3.9'
+services:
+  api:
+    image: api-a3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'        
+    ports: 
+      - "6001:80" 
+  database:
+    image: db-a3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+    ports: 
+      - "6003:80"
