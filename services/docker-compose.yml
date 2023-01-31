@@ -8,11 +8,38 @@ services:
           cpus: '0.50'        
     ports: 
       - "6001:80" 
+    networks:
+      static-nw:
+        ipv4_address: 180.20.128.4
+  client:
+    image: client-a3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+    ports: 
+      - "6002:80"
+    networks:
+      static-nw:
+        ipv4_address: 180.20.128.5
   database:
     image: db-a3
+    volumes:
+      - myapp:/home/app
     deploy:
       resources:
         limits:
           cpus: '0.50'
     ports: 
       - "6003:80"
+    networks:
+      static-nw:
+        ipv4_address: 180.20.128.6
+volumes:
+  myapp:
+networks:
+  static-nw:
+    ipam:
+      config:
+        - subnet: 180.20.0.0/16
+          ip_range: 180.28.5.0/24

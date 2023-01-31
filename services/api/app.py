@@ -6,11 +6,14 @@ import os
 import csv
 from custom_logger import Custom_Logger
 import random
-
+from downloader import Dataset_downloader
+from flask_cors import CORS
 
 
 app = flask.Flask(__name__)
 app.config["DEBUG"] = True
+CORS(app)
+
 
 # setup
 database_url = os.getenv("DATABASE-SVC", "http://database")
@@ -143,7 +146,8 @@ def range_search(k1, k2):
             key = record["key"]
             bucket = hash_function(key)
             content = record["content"]
-            log_content = "Range_Read: key:[" + str(key) + "] - value: "+ content + " - filename:[" + str(key)+ "]  - node:[" + str(bucket) + "] - [success]"
+            #log_content = "Range_Read: key:[" + str(key) + "] - value: "+ content + " - filename:[" + str(key)+ "]  - node:[" + str(bucket) + "] - [success]"
+            log_content = "Range_Read: key:[" + str(key) + "] - filename:[" + str(key)+ "]  - node:[" + str(bucket) + "] - [success]"
             logger.write(log_content)
 
         return json_response
@@ -179,7 +183,8 @@ def search(k):
 
     if(json_response.get("content")):
         # log access
-        log_content = "Read_: key:[" + str(k) + "] - value: "+ json_response.get("content") + " - filename:[" + str(k)+ "]  - node:[" + str(bucket) + "] - [success]"
+        #log_content = "Read_: key:[" + str(k) + "] - value: "+ json_response.get("content") + " - filename:[" + str(k)+ "]  - node:[" + str(bucket) + "] - [success]"
+        log_content = "Read_: key:[" + str(k) + "] - filename:[" + str(k)+ "]  - node:[" + str(bucket) + "] - [success]"
         logger.write(log_content)
 
         return json_response
@@ -207,7 +212,8 @@ def delete(k):
 
     if response.ok:
         # log it!
-        log_content = "Delete: key:[" + str(k) + "] - value: "+ json_response.get("content") + " - filename:[" + str(k)+ "]  - node:[" + str(bucket) + "] - [success]"
+        #log_content = "Delete: key:[" + str(k) + "] - value: "+ json_response.get("content") + " - filename:[" + str(k)+ "]  - node:[" + str(bucket) + "] - [success]"
+        log_content = "Delete: key:[" + str(k) + "] - filename:[" + str(k)+ "]  - node:[" + str(bucket) + "] - [success]"
         logger.write(log_content)
 
         return json_response
@@ -222,13 +228,22 @@ def populate(batch_size):
     # log start of process:
     logger.write("Start populating data...|")
 
+    dataset_url = "https://archive.ics.uci.edu/ml/machine-learning-databases/00203/YearPredictionMSD.txt.zip"
+    filename = "YearPredictionMSD.txt"
+
 
     # get file from external source
-    file_name = "demo.csv"
+    # check if file is available, otherwise, download it!
+    if(os.path.exists(filename)):
+        log("FILE EXISTS!!!")
+    else:
+        log("NO EXIST------__> DOWNLOAD!!")
+        data_downloader = Dataset_downloader(url=dataset_url, filename=filename)
+        data_downloader.download_dataset()
 
     # process csv splitting it into batches. Then store them on the distributed storage.
     try:
-        total_batches =  read_csv_in_batches(file_name, batch_size) + 1
+        total_batches =  read_csv_in_batches(filename, batch_size) + 1
 
         # after reading. Get status of buckets!
         database_summary()
@@ -301,7 +316,7 @@ class Test():
         pass
 
     def test_pipeline(self):
-        batch_size = 20 # number o element in batch to split data
+        batch_size = 500 # number o element in batch to split data
         # 1. populate!
         total_batches = populate(batch_size)
 
@@ -321,7 +336,11 @@ class Test():
         k2=10
         range_search(k1=k1, k2=k2)
 
-        return "Test pipeline completed!"
+        
+        response = {
+            "message": "Test pipeline completed!",
+        }
+        return response
 
 
 @app.route("/test_pipeline",  methods = ['GET'])
