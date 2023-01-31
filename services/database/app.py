@@ -83,13 +83,13 @@ def search():
 
     except FileNotFoundError as e:
         error_message = "Key not found!"
-        log("ERRORRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR: file not found!")
+        log("ERROR: file not found!")
         log(e)
         abort(make_response(jsonify(message=error_message, error_type="not_found"), 400))
         
     except Exception as e: # General error
         error_message = "An exception occurred"
-        log("ERRORRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR reading")
+        log("ERROR reading")
         log(e)
         abort(make_response(jsonify(message=error_message, error_type="internal_error"), 400))
 
