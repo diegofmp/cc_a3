@@ -2,6 +2,7 @@ import flask
 from flask import request, jsonify, make_response, abort
 from datetime import datetime
 import os
+import csv
 
 app = flask.Flask(__name__)
 app.config["DEBUG"] = True
@@ -31,7 +32,7 @@ def check_root_directory():
             log("folder doesmnt exsit!!!!. gonna create")
 
             # create root folder and subfolders (buckets)
-            for i in range(1, num_buckets+1):
+            for i in range(num_buckets):
                 target_subdir = os.path.join(target_dir, str(i))
                 log(target_subdir)
                 os.makedirs(target_subdir)
@@ -41,7 +42,17 @@ def check_root_directory():
     else:
         log("Root folder already exists!!")
         
-        
+
+# list content of directory
+def list_directory_content(path):
+    content = [[root, dirs, files] for root, dirs, files in os.walk(path)]
+    return content
+
+@app.route("/content_summary",  methods = ['GET'])
+def content_summary():
+    target_dir = os.path.join(os.getcwd(), 'buckets')
+    #list_directory_content(target_dir)
+    return list_directory_content(target_dir)
         
 
 ####################### Endpoints ##############################################
@@ -101,8 +112,18 @@ def insert():
 
         # insert file into corresponding target folder
         # TODO
-        with open(os.path.join(root_buckets_path, str(target), str(key)), 'w') as fp:
-            fp.write(value)
+
+        file_type = "csv"
+
+        if file_type=="csv":
+            with open(os.path.join(root_buckets_path, str(target), str(key)), 'w', newline='') as fp:
+                writer = csv.writer(fp)
+                for line in value:
+                    writer.writerow(line)
+
+        else:
+            with open(os.path.join(root_buckets_path, str(target), str(key)), 'w') as fp:
+                fp.write(value)
             
         log("STORING....")
         log("request: ")
@@ -184,12 +205,17 @@ def range_search():
 def delete():
     key = request.args.get('key')
     bucket = request.args.get('bucket')
+    content = None
 
     try:
         log("Trying to delete....")
         filename = os.path.join(root_buckets_path, str(bucket), str(key))
         log(filename)
         if os.path.isfile(filename):
+            file = open(filename, mode='r')
+            content = file.read()
+            file.close()
+
             os.remove(filename)
         else:
             error_message = "Key not found!"
@@ -197,6 +223,7 @@ def delete():
         
         response = {
             "removed": key,
+            "content": content,
             "timestamp": getTime(),
         }
         

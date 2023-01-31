@@ -3,6 +3,8 @@ from flask import request, jsonify, make_response, abort
 from datetime import datetime
 import requests
 import os
+import csv
+from custom_logger import Custom_Logger, Log_record
 
 
 app = flask.Flask(__name__)
@@ -29,6 +31,9 @@ def getTime():
 def log(something):
     app.logger.info(something)
 
+# initialize custom logger instance
+logger = Custom_Logger("logs.txt")
+
 
 ####################### Endpoints ##############################################
 @app.route("/test",  methods = ['GET'])
@@ -38,14 +43,31 @@ def test_endpoint():
 
 @app.route("/insert",  methods = ['POST'])
 #@expects_json(frame_schema)
-def insert():
+#def insert():
+def insert_handler():
     # take the key and value a from request
     req = request.get_json()
 
     key = req["k"]
     a = req["a"]
 
+    #return response
+    return insert(key=key, value=a)
+    
+def database_summary():
+    # get folders summary
+    response =  requests.get(database_url + "/content_summary")
 
+    # log it!
+    json_response = response.json()
+    for level in json_response:
+        log(level)
+        if (len(level[1])==0): # if we are in a bucket, not root:
+            message = "Bucket: "+ str(level[0]) + " - files: "+ str(level[2])
+            logger.write(message)
+
+
+def insert(key, value):
     # Process: get target key
     target_bucket = hash_function(key)
 
@@ -53,8 +75,8 @@ def insert():
     # prepare request 
     db_request = {
         "key" : key,
-        "value": a,
-        "target": target_bucket                
+        "value": value,
+        "target": target_bucket
     }
 
     log("DB_REQUEST: ")
@@ -65,6 +87,9 @@ def insert():
     json_response = response.json()
     log("JSON_RESPONSE OF DB: ")
     log(json_response)
+    if(response.ok):
+        log_content = "Insert: key:[" + str(key) + "] - filename:[" + str(key)+ "]  - node:[" + str(target_bucket) + "] - [success]"
+        logger.write(log_content)
 
     response = {
         "timestamp": getTime(),
@@ -142,6 +167,10 @@ def search(k):
     log(json_response)
 
     if(json_response.get("content")):
+        # log access
+        log_content = "Read_: key:[" + str(k) + "] - value: "+ json_response.get("content") + " - filename:[" + str(k)+ "]  - node:[" + str(bucket) + "] - [success]"
+        logger.write(log_content)
+
         return json_response
     else:
         error_type = json_response.get("error_type")
@@ -166,11 +195,62 @@ def delete(k):
     log(json_response)
 
     if response.ok:
+        # log it!
+        log_content = "Delete: key:[" + str(k) + "] - value: "+ json_response.get("content") + " - filename:[" + str(k)+ "]  - node:[" + str(bucket) + "] - [success]"
+        logger.write(log_content)
+
         return json_response
     else:
         error_type = json_response.get("error_type")
         message = json_response.get("message")
         abort(make_response(jsonify(message=message, error_type=error_type), 400))
+
+### endpoint to laod data (populate storage) from file
+@app.route("/populate",  methods = ['GET'])
+def populate():
+    # log start of process:
+    logger.write("Start populating data...|")
+
+    #PARAMS:
+    batch_size = 50 # size of splits that would be stored w unique key.
+
+    # get file from external source
+    file_name = "demo.csv"
+
+    # process csv splitting it into batches. Then store them on the distributed storage.
+    try:
+        read_csv_in_batches(file_name, batch_size)
+
+        # after reading. Get status of buckets!
+        database_summary()
+
+    except Exception as e:
+        error_message = e
+        abort(make_response(jsonify(message=error_message, error_type="unknown"), 400))
+    
+    return "Storage population has started!!"
+
+def read_csv_in_batches(filename, batch_size):
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        #header = next(reader)
+        batch = []
+        batch_index = 0
+        for i, row in enumerate(reader):
+            batch.append(row)
+            if (i + 1) % batch_size == 0:
+                try:
+                    insert(key=batch_index, value=batch)
+                except Exception as e:
+                    # log error and continue loop.
+                    log("Error inserting %d" % batch_index)
+                    log(e)
+
+                batch = []
+                batch_index += 1
+        # handle the last batch if its size is less than batch_size
+        if batch:
+            insert(key=batch_index, value=batch)
 
 
 if __name__ == '__main__':
